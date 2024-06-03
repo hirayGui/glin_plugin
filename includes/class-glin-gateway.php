@@ -350,15 +350,15 @@ class WC_Glin_Gateway extends WC_Payment_Gateway
         $cart_total = $this->get_order_total(); 
         $total = number_format($cart_total, 2, '.', ',');
 
-        $url = 'https://pay.staging.glin.com.br/merchant-api/remittances/';
+        $url = 'https://pay.glin.com.br/merchant-api/remittances/';
 
 		$body_req = [
             'clientReferenceId' => $order_id,
             'amount' => $total,
             'currency' => 'USD',
             'expiresAt' => $expireDate,
-            'successUrl' => "https://hml.coisasdeorlando.com/checkout/pedido-recebido/?order-id-glin=".$order_id,
-            'cancelUrl' => 'https://hml.coisasdeorlando.com/carrinho-de-compras/'
+            'successUrl' => "https://cdo.travel/checkout/pedido-recebido/?order-id-glin=".$order_id,
+            'cancelUrl' => 'https://cdo.travel/carrinho-de-compras/'
 		];
 
 		$args = array(
@@ -375,8 +375,6 @@ class WC_Glin_Gateway extends WC_Payment_Gateway
 		);
         
         $response = wp_remote_post($url, $args);	
-        
-        echo "<script>console.log('Debug Objects: " . var_dump($response) . "' );</script>";
 
 
         if($response['response']['code'] != 200){

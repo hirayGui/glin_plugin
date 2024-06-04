@@ -67,7 +67,74 @@ class WC_Glin_Gateway extends WC_Payment_Gateway
 
 		// Customer Emails.
 		add_action('woocommerce_email_before_order_table', array($this, 'email_instructions'), 10, 3);
+
+		// Adiciona um intervalo de tempo personalizado ao WP-Cron
+        add_filter('cron_schedules', array($this, 'adicionar_intervalo_horario'));
+
+        // Agenda o evento se ainda não estiver agendado
+        if (!wp_next_scheduled('evento_verificar_pedidos')) {
+            wp_schedule_event(time(), 'a_cada_hora', 'evento_verificar_pedidos');
+        }
+
+        // Vincula a função ao evento agendado
+        add_action('evento_verificar_pedidos', array($this, 'verificar_pedidos_cancelados_pendentes'));
+
+        // Limpa o evento ao desativar o plugin
+        register_deactivation_hook(__FILE__, array($this, 'desativar_evento_verificar_pedidos'));
 	}
+
+	public function adicionar_intervalo_horario($schedules) {
+        $schedules['a_cada_hora'] = array(
+            'interval' => 3600, // 3600 segundos = 1 hora
+            'display'  => __('A cada hora')
+        );
+        return $schedules;
+    }
+
+    public function verificar_pedidos_cancelados_pendentes() {
+        // Obter pedidos cancelados ou pendentes
+        $args = array(
+            'status' => array('wc-pending', 'wc-on-hold', 'wc-processing', 'wc-completed', 'wc-failed', 'wc-cancelled', 'wc-refunded'),
+            'limit' => -1,
+        );
+
+        $pedidos = wc_get_orders($args);
+
+        foreach ($pedidos as $pedido) {
+            $id_transaction = $pedido->get_meta('id_transacao');
+
+			if(!empty($id_transaction)){
+				$status_url = 'https://pay.glin.com.br/merchant-api/remittances/'.$id_transaction;
+
+				$status_response = wp_remote_get($status_url, array(
+					'method' => 'POST',
+					'headers' => array(
+							'Authorization' => 'Bearer '. $this->token,
+							'Content-Type' => 'application/json',
+							'Connection' => 'keep-alive',
+							'Accept-Encoding' => 'gzip, deflate, br',
+							'Accept' => 'application/json'
+						),
+					'timeout' => 90
+				));
+
+				if(!is_wp_error($status_response) && wp_remote_retrieve_response_code($status_response) == 200){
+					$status_data = json_decode(wp_remote_retrieve_body($status_response), true);
+
+					if(isset($status_data['status']) && !empty($status_data['status'])){
+						if($status_data['status'] == 'paid' || $status_data['status'] == 'delivered'){
+							$pedido->update_status('wc-completed');
+						}
+					}
+				}
+			}
+        }
+    }
+
+    public function desativar_evento_verificar_pedidos() {
+        $timestamp = wp_next_scheduled('evento_verificar_pedidos');
+        wp_unschedule_event($timestamp, 'evento_verificar_pedidos');
+    }
 
 
 
